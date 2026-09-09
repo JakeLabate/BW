@@ -47,16 +47,25 @@ export interface Source {
   id: string;
   brand_id: string;
   kind: SourceKind;
+  name: string;
   label: string;
   url: string | null;
   config: Record<string, unknown>;
+  status: "active" | "paused";
+  schedule: "manual" | "daily" | "weekly" | "monthly";
+  scope: string[];
+  min_confidence: number;
+  auto_confirm: boolean;
   last_run_at: string | null;
+  next_run_at: string | null;
+  run_count: number;
   created_at: string;
 }
 
 export interface Message {
   id: string;
   brand_id: string;
+  source_id: string | null;
   channel: string;
   sender: string | null;
   subject: string | null;

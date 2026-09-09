@@ -25,12 +25,27 @@ Return ONLY JSON: {"palette": ["#hex", ...], "facts": [{field_key, value, confid
 
 Deno.serve(handle(async (req) => {
   const { user, supa } = await requireUser(req);
-  const { brand_id, logo_data_url, posts_text } = await req.json();
+  const { brand_id, source_id, logo_data_url, posts_text } = await req.json();
   if (!brand_id) throw new HttpError("brand_id required");
   if (!logo_data_url && !posts_text) throw new HttpError("give me a logo, a post history, or both");
 
   const { data: brand } = await supa.from("brands").select("id, name").eq("id", brand_id).single();
   if (!brand) throw new HttpError("brand not found", 404);
+
+  let integration: {
+    id: string; scope: string[]; min_confidence: number; auto_confirm: boolean;
+    config: Record<string, unknown>;
+  } | null = null;
+  if (source_id) {
+    const { data } = await supa
+      .from("sources")
+      .select("id, scope, min_confidence, auto_confirm, config")
+      .eq("id", source_id)
+      .eq("brand_id", brand_id)
+      .maybeSingle();
+    if (!data) throw new HttpError("integration not found", 404);
+    integration = data as typeof integration;
+  }
 
   const apiKey = await anthropicKeyFor(user.id);
 
@@ -83,12 +98,14 @@ Deno.serve(handle(async (req) => {
 
     const rows = (out.facts ?? [])
       .filter((f) => valid.has(String(f.field_key)) && f.value)
+      .map((f) => ({ ...f, conf: Math.min(1, Math.max(0, Number(f.confidence) || 0.5)) }))
+      .filter((f) => f.conf >= floor)
       .map((f) => ({
         brand_id,
         field_key: String(f.field_key),
         value: String(f.value).slice(0, 2000),
-        status: "proposed" as const,
-        confidence: Math.min(1, Math.max(0, Number(f.confidence) || 0.5)),
+        status: (autoConfirm ? "confirmed" : "proposed") as "confirmed" | "proposed",
+        confidence: f.conf,
         source_id: source?.id ?? null,
         source_kind: "ai_inference" as const,
         evidence: { quote: f.quote ?? null },
@@ -102,6 +119,6 @@ Deno.serve(handle(async (req) => {
     }
 
     await supa.rpc("refresh_profile_gaps", { p_brand: brand_id });
-    return { proposed: rows.length, palette: out.palette ?? [] };
+    return { proposed: rows.length, auto_confirmed: autoConfirm ? rows.length : 0, palette: out.palette ?? [] };
   }));
 }));

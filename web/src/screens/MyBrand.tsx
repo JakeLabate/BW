@@ -1,19 +1,22 @@
 import { useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { completeness, historyFor, proposedFacts, useBrand } from "../lib/store";
+import { completeness, historyFor, openGaps, proposedFacts, useBrand } from "../lib/store";
 import {
   SOURCE_LABEL,
   type Fact,
   type FactHistory,
   type FieldDef,
+  type Gap,
   type ModuleStatus,
 } from "../lib/types";
-import { Busy, Notice, timeAgo, useAction } from "../lib/ui";
+import { Busy, Empty, Notice, timeAgo, useAction } from "../lib/ui";
+
+type Filter = "attention" | "all" | "filled" | "empty";
 
 export default function MyBrand() {
-  const { brand, defs, modules, facts, history, industries, reload } = useBrand();
+  const { brand, defs, modules, facts, history, industries, gaps, reload } = useBrand();
   const b = brand!;
-  const [filter, setFilter] = useState<"all" | "filled" | "empty">("all");
+  const [filter, setFilter] = useState<Filter>("attention");
 
   const byField = useMemo(() => {
     const map = new Map<string, Fact[]>();
@@ -55,7 +58,17 @@ export default function MyBrand() {
 
   const c = completeness(modules);
   const proposed = proposedFacts(facts);
+  const marketGaps = openGaps(gaps, "market");
   const enabled = modules.filter((m) => m.enabled);
+  const confirmedKeys = new Set(
+    facts.filter((f) => f.status === "confirmed").map((f) => f.field_key),
+  );
+  const proposedKeys = new Set(proposed.map((f) => f.field_key));
+  const needsAttention = (d: FieldDef) =>
+    proposedKeys.has(d.key) || (d.required && !confirmedKeys.has(d.key));
+  const attentionCount = defs.filter(
+    (d) => enabled.some((m) => m.group_key === d.group_key) && needsAttention(d),
+  ).length;
   const available = modules.filter((m) => !m.enabled);
   const industry = industries.find((i) => i.key === b.industry_key);
 
@@ -81,9 +94,16 @@ export default function MyBrand() {
             </div>
           </div>
           <div className="row">
+            <button
+              className={filter === "attention" ? "sm ok" : "sm"}
+              onClick={() => setFilter("attention")}
+            >
+              Needs attention
+              {attentionCount > 0 && <span className="count hot" style={{ marginLeft: 6 }}>{attentionCount}</span>}
+            </button>
             {(["all", "filled", "empty"] as const).map((f) => (
               <button key={f} className={filter === f ? "sm ok" : "sm"} onClick={() => setFilter(f)}>
-                {f === "all" ? "All" : f === "filled" ? "Filled" : "Empty"}
+                {f === "all" ? "Everything" : f === "filled" ? "Filled" : "Empty"}
               </button>
             ))}
           </div>
@@ -109,10 +129,40 @@ export default function MyBrand() {
         </div>
       )}
 
+      {marketGaps.length > 0 && (
+        <section style={{ marginBottom: 26 }}>
+          <div className="module-head">
+            <div>
+              <h2>Demand you are not serving</h2>
+              <p className="sub tight">
+                Read out of the customer inbox. Approving one adds a real offer to this brand, which
+                the Generate tab can then announce.
+              </p>
+            </div>
+          </div>
+          <div className="stack">
+            {marketGaps.map((g) => (
+              <MarketGap key={g.id} gap={g} brandId={b.id} onDone={reload} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {filter === "attention" && attentionCount === 0 && marketGaps.length === 0 && (
+        <Empty title="Nothing needs you right now">
+          <p className="tight">
+            Every required field has a confirmed value and no collected value is waiting for review.
+          </p>
+        </Empty>
+      )}
+
       {enabled.map((m) => {
         const fields = (fieldsByGroup.get(m.group_key) ?? []).filter((d) => {
           const has = (byField.get(d.key) ?? []).some((f) => f.status === "confirmed");
-          return filter === "all" || (filter === "filled" ? has : !has);
+          if (filter === "attention") return needsAttention(d);
+          if (filter === "filled") return has;
+          if (filter === "empty") return !has;
+          return true;
         });
         if (!fields.length) return null;
         return (
@@ -486,5 +536,98 @@ function PickIndustry() {
         <Busy busy={save.busy}>Use this preset</Busy>
       </button>
     </>
+  );
+}
+
+/* -------------------------------------------------------- market gaps */
+
+function MarketGap({ gap, brandId, onDone }: { gap: Gap; brandId: string; onDone: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(gap.title);
+  const [price, setPrice] = useState("");
+
+  const approve = useAction(async () => {
+    if (!name.trim()) throw new Error("Name the offer.");
+    const { error } = await supabase.from("offers").insert({
+      brand_id: brandId,
+      gap_id: gap.id,
+      name: name.trim(),
+      description: gap.suggestion ?? gap.detail,
+      price: price.trim() || null,
+      status: "approved",
+    });
+    if (error) throw error;
+    await supabase
+      .from("gaps")
+      .update({ status: "resolved", resolved_at: new Date().toISOString() })
+      .eq("id", gap.id);
+    await onDone();
+  });
+
+  const reject = useAction(async () => {
+    const { error } = await supabase.from("gaps").update({ status: "dismissed" }).eq("id", gap.id);
+    if (error) throw error;
+    await onDone();
+  });
+
+  return (
+    <div className="card" style={{ borderColor: "var(--amber-line)" }}>
+      <div className="row" style={{ gap: 8 }}>
+        <span className="pill amber">Market gap</span>
+        <span className="pill">{gap.demand_count} asks</span>
+      </div>
+      <h3 style={{ marginTop: 6 }}>{gap.title}</h3>
+      {gap.detail && <p className="sub" style={{ marginTop: 4 }}>{gap.detail}</p>}
+
+      {gap.suggestion && (
+        <div className="notice info" style={{ marginTop: 10 }}>
+          <strong>Suggestion.</strong> {gap.suggestion}
+        </div>
+      )}
+
+      {gap.evidence?.length > 0 && (
+        <details style={{ marginTop: 6 }}>
+          <summary className="small muted" style={{ cursor: "pointer" }}>
+            {gap.evidence.length} messages behind this
+          </summary>
+          <div style={{ marginTop: 8 }}>
+            {gap.evidence.map((e, i) => (
+              <div className="fact" key={i}>
+                <div className="val">
+                  <div className="q" style={{ fontStyle: "italic" }}>"{e.quote}"</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <Notice kind="err">{approve.error ?? reject.error}</Notice>
+
+      {open ? (
+        <div className="inline-form" style={{ marginTop: 12 }}>
+          <div>
+            <label htmlFor={`n-${gap.id}`}>Offer name</label>
+            <input id={`n-${gap.id}`} type="text" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div style={{ flex: "0 1 160px" }}>
+            <label htmlFor={`p-${gap.id}`}>Price</label>
+            <input id={`p-${gap.id}`} type="text" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="From $120" />
+          </div>
+          <button className="primary" onClick={() => approve.run()} disabled={approve.busy}>
+            <Busy busy={approve.busy}>Create the offer</Busy>
+          </button>
+        </div>
+      ) : (
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="primary" onClick={() => setOpen(true)}>
+            Approve and make it an offer
+          </button>
+          <button className="ghost danger" onClick={() => reject.run()} disabled={reject.busy}>
+            Not for us
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

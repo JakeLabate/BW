@@ -54,7 +54,7 @@ export default function Generate() {
         <Notice kind="info">
           {c.requiredTotal - c.requiredFilled} required fields are still empty. Content will be
           thinner than it needs to be until they are filled.{" "}
-          <a href={`#/b/${b.id}/gaps`}>See the gaps</a>.
+          <a href={`#/b/${b.id}/brand`}>See what is missing</a>.
         </Notice>
       )}
 

@@ -14,6 +14,17 @@ import {
   withRun,
 } from "../_shared/lib.ts";
 
+type Field = {
+  key: string;
+  label: string;
+  help: string | null;
+  required: boolean;
+  multi: boolean;
+  group_key: string;
+  group_label: string;
+  enabled: boolean;
+};
+
 type Extracted = {
   field_key: string;
   value: string;
@@ -36,7 +47,7 @@ Return ONLY a JSON array of objects: {field_key, value, confidence, quote, page}
 
 Deno.serve(handle(async (req) => {
   const { user, supa } = await requireUser(req);
-  const { brand_id, url, pasted_text, label, kind } = await req.json();
+  const { brand_id, source_id, url, pasted_text, label, kind } = await req.json();
   if (!brand_id) throw new HttpError("brand_id required");
 
   const { data: brand, error: brandErr } = await supa
@@ -46,6 +57,22 @@ Deno.serve(handle(async (req) => {
     .single();
   if (brandErr || !brand) throw new HttpError("brand not found", 404);
 
+  // the standing integration this run belongs to, if any
+  let integration: {
+    id: string; url: string | null; scope: string[]; min_confidence: number;
+    auto_confirm: boolean; schedule: string; config: Record<string, unknown>;
+  } | null = null;
+  if (source_id) {
+    const { data } = await supa
+      .from("sources")
+      .select("id, url, scope, min_confidence, auto_confirm, schedule, config")
+      .eq("id", source_id)
+      .eq("brand_id", brand_id)
+      .maybeSingle();
+    if (!data) throw new HttpError("integration not found", 404);
+    integration = data as typeof integration;
+  }
+
   // fields this brand's industry can hold, enabled modules or not
   const { data: defs, error: defsErr } = await supa.rpc("industry_fields", { p_brand: brand_id });
   if (defsErr) throw new HttpError(defsErr.message, 500);
@@ -54,6 +81,12 @@ Deno.serve(handle(async (req) => {
       "This brand has no industry preset yet, so there are no fields to collect into.",
       422,
     );
+  }
+
+  const scope: string[] = integration?.scope ?? [];
+  const offered = (defs as Field[]).filter((d) => !scope.length || scope.includes(d.group_key));
+  if (!offered.length) {
+    throw new HttpError("This integration is scoped to modules that hold no fields.", 422);
   }
 
   const apiKey = await anthropicKeyFor(user.id);
@@ -66,7 +99,7 @@ Deno.serve(handle(async (req) => {
     if (pasted_text) {
       pages.push({ url: url ?? "pasted", title: label ?? "Pasted text", text: String(pasted_text).slice(0, 60_000) });
     } else {
-      const start = url ?? brand.website_url;
+      const start = url ?? integration?.url ?? brand.website_url;
       if (!start) throw new HttpError("no url to read");
       const home = await readPage(start);
       if (!home) {
@@ -87,19 +120,39 @@ Deno.serve(handle(async (req) => {
     }
     log({ pages: pages.map((p) => p.url), failed });
 
-    // ---- record the source ----------------------------------------------
-    const { data: source } = await supa
-      .from("sources")
-      .insert({
-        brand_id,
-        kind: pasted_text ? "owner_input" : "web_scrape",
-        label: label ?? (pages[0]?.title || pages[0]?.url || "Web"),
-        url: pages[0]?.url ?? null,
-        config: { pages: pages.map((p) => p.url), failed },
-        last_run_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+    // ---- the integration this run belongs to ------------------------------
+    const now = new Date().toISOString();
+    let source: { id: string } | null = null;
+
+    if (integration) {
+      const { data } = await supa
+        .from("sources")
+        .update({
+          last_run_at: now,
+          config: { ...integration.config, pages: pages.map((p) => p.url), failed },
+        })
+        .eq("id", integration.id)
+        .select("id")
+        .single();
+      source = data;
+      await supa.rpc("bump_integration", { p_source: integration.id });
+    } else {
+      const { data } = await supa
+        .from("sources")
+        .insert({
+          brand_id,
+          kind: pasted_text ? "owner_input" : "web_scrape",
+          name: label ?? (pages[0]?.title || pages[0]?.url || "Website"),
+          label: label ?? (pages[0]?.title || pages[0]?.url || "Website"),
+          url: pages[0]?.url ?? null,
+          config: { pages: pages.map((p) => p.url), failed },
+          last_run_at: now,
+          run_count: 1,
+        })
+        .select("id")
+        .single();
+      source = data;
+    }
 
     // ---- extract ---------------------------------------------------------
     const corpus = pages
@@ -107,8 +160,8 @@ Deno.serve(handle(async (req) => {
       .join("\n\n")
       .slice(0, 90_000);
 
-    const fieldList = (defs ?? [])
-      .map((d: { key: string; group_label: string; label: string; multi: boolean; help: string | null }) =>
+    const fieldList = offered
+      .map((d) =>
         `- ${d.key} (${d.group_label}) — ${d.label}${d.multi ? " [multiple allowed]" : ""}${d.help ? `: ${d.help}` : ""}`)
       .join("\n");
 
@@ -121,7 +174,7 @@ Deno.serve(handle(async (req) => {
         `MATERIAL:\n${corpus}`,
     });
 
-    const valid = new Set((defs ?? []).map((d: { key: string }) => d.key));
+    const valid = new Set(offered.map((d) => d.key));
     const extracted = parseJson<Extracted[]>(reply).filter(
       (f) => f && f.field_key && f.value && valid.has(f.field_key),
     );
@@ -133,14 +186,27 @@ Deno.serve(handle(async (req) => {
       .eq("brand_id", brand_id);
     const seen = new Set((existing ?? []).map((e) => `${e.field_key}::${e.value.toLowerCase().trim()}`));
 
+    const floor = Number(integration?.min_confidence ?? 0);
+    const autoConfirm = !!integration?.auto_confirm;
+    let belowFloor = 0;
+
     const rows = extracted
       .filter((f) => !seen.has(`${f.field_key}::${f.value.toLowerCase().trim()}`))
+      .map((f) => ({
+        ...f,
+        confidence: Math.min(1, Math.max(0, Number(f.confidence) || 0.5)),
+      }))
+      .filter((f) => {
+        if (f.confidence >= floor) return true;
+        belowFloor++;
+        return false;
+      })
       .map((f) => ({
         brand_id,
         field_key: f.field_key,
         value: String(f.value).slice(0, 2000),
-        status: "proposed" as const,
-        confidence: Math.min(1, Math.max(0, Number(f.confidence) || 0.5)),
+        status: (autoConfirm ? "confirmed" : "proposed") as "confirmed" | "proposed",
+        confidence: f.confidence,
         source_id: source?.id ?? null,
         source_kind: (pasted_text ? "owner_input" : "web_scrape") as const,
         evidence: { quote: f.quote ?? null, page: f.page ?? pages[0]?.url ?? null },
@@ -154,8 +220,7 @@ Deno.serve(handle(async (req) => {
     await supa.rpc("refresh_profile_gaps", { p_brand: brand_id });
 
     const moduleOf = new Map(
-      (defs ?? []).map((d: { key: string; group_key: string; group_label: string; enabled: boolean }) =>
-        [d.key, { key: d.group_key, label: d.group_label, enabled: d.enabled }]),
+      offered.map((d) => [d.key, { label: d.group_label, enabled: d.enabled }]),
     );
     const newModules: Record<string, number> = {};
     for (const r of rows) {
@@ -168,7 +233,9 @@ Deno.serve(handle(async (req) => {
       pages_read: pages.length,
       pages_failed: failed,
       proposed: rows.length,
-      skipped_duplicates: extracted.length - rows.length,
+      auto_confirmed: autoConfirm ? rows.length : 0,
+      below_confidence_floor: belowFloor,
+      skipped_duplicates: extracted.length - rows.length - belowFloor,
       source_id: source?.id ?? null,
     };
   }));

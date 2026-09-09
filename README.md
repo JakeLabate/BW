@@ -37,6 +37,19 @@ because a form demanded forty answers up front.
 Gaps only ever come from modules that are switched on, which is what keeps a new brand from opening
 with an impossible checklist.
 
+## Sources are integrations, not receipts
+
+Each source is a standing connection with its own settings: a name, an on or off switch, how often
+it captures, which modules it is allowed to write to, a confidence floor below which values are
+discarded, and whether it is trusted enough to skip your review. The customer inbox is one of these
+too, rather than a screen of its own.
+
+Scope is the interesting one. Point an integration at three modules and it can only ever write
+there, so a scraper that keeps guessing at your voice can be told to stick to contact details.
+
+Schedules are stored intent. Automatic runs are not wired up yet, so anything other than manual
+shows as due rather than firing on its own.
+
 ## Every field remembers
 
 `fact_history` records each change to every field: added, edited, confirmed, rejected or removed,
@@ -91,6 +104,11 @@ cd web
 npm install
 npm run dev
 ```
+
+There is deliberately no committed lockfile. Vite and TypeScript both ship per-platform native
+binaries as optional dependencies, and npm only records the variants for whichever machine generated
+the lock, so a committed lockfile makes the repo installable on one architecture and broken on every
+other. CI runs `npm install` instead of `npm ci`.
 
 `web/.env.production` carries the Supabase URL and publishable key. Both are public by design; the
 publishable key only reaches data that row level security already allows.

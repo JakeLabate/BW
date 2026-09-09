@@ -9,9 +9,7 @@ import SignIn from "./screens/SignIn";
 import Brands from "./screens/Brands";
 import Dashboard from "./screens/Dashboard";
 import MyBrand from "./screens/MyBrand";
-import Sources from "./screens/Sources";
-import Gaps from "./screens/Gaps";
-import Inbox from "./screens/Inbox";
+import Integrations from "./screens/Integrations";
 import Generate from "./screens/Generate";
 import Queue from "./screens/Queue";
 import Settings from "./screens/Settings";
@@ -106,9 +104,7 @@ function TopBar({ email, brandId }: { email: string; brandId?: string }) {
 const NAV: Array<{ key: string; label: string; group: string }> = [
   { key: "home", label: "Overview", group: "" },
   { key: "brand", label: "My Brand", group: "Knowledge" },
-  { key: "sources", label: "Sources", group: "Knowledge" },
-  { key: "gaps", label: "Gaps", group: "Knowledge" },
-  { key: "inbox", label: "Customer Inbox", group: "Knowledge" },
+  { key: "integrations", label: "Integrations", group: "Knowledge" },
   { key: "generate", label: "Generate", group: "Content" },
   { key: "queue", label: "Queue", group: "Content" },
   { key: "settings", label: "Settings", group: "Brand" },
@@ -117,16 +113,14 @@ const NAV: Array<{ key: string; label: string; group: string }> = [
 const SCREENS: Record<string, ComponentType> = {
   home: Dashboard,
   brand: MyBrand,
-  sources: Sources,
-  gaps: Gaps,
-  inbox: Inbox,
+  integrations: Integrations,
   generate: Generate,
   queue: Queue,
   settings: Settings,
 };
 
 function BrandShell({ tab }: { tab: string }) {
-  const { brand, loading, error, facts, gaps, content, messages, sources } = useBrand();
+  const { brand, loading, error, facts, gaps, content, sources } = useBrand();
 
   if (loading && !brand) {
     return (
@@ -149,10 +143,11 @@ function BrandShell({ tab }: { tab: string }) {
   }
 
   const counts: Record<string, { n: number; hot?: boolean }> = {
-    brand: { n: facts.filter((f) => f.status === "proposed").length, hot: true },
-    gaps: { n: openGaps(gaps).length, hot: true },
-    sources: { n: sources.length },
-    inbox: { n: messages.length },
+    brand: {
+      n: facts.filter((f) => f.status === "proposed").length + openGaps(gaps).length,
+      hot: true,
+    },
+    integrations: { n: sources.length },
     queue: { n: content.filter((c) => c.status === "draft").length, hot: true },
   };
 

@@ -3,3 +3,8 @@ dist
 .DS_Store
 *.log
 .env.local
+
+# Vite 8 and TypeScript 7 ship per-platform native binaries, and npm only
+# records the variants for the machine that generated the lockfile. Committing
+# one makes the repo buildable on that architecture and no other.
+web/package-lock.json

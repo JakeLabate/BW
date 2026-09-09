@@ -38,11 +38,12 @@ export default function Dashboard() {
 
       <div className="section-title">The loop</div>
       <div className="loop">
-        <a className="node" href={`#/b/${b.id}/sources`}>
+        <a className="node" href={`#/b/${b.id}/integrations`}>
           <div className="k">1. Collect</div>
-          <div className="t">Sources</div>
+          <div className="t">Integrations</div>
           <div className="d">
-            Owner input, the website, AI reading the logo and past posts, and the customer inbox.
+            The website, pasted material, AI reading the logo and past posts, and the customer
+            inbox. Each one with its own settings.
           </div>
         </a>
         <a className="node" href={`#/b/${b.id}/brand`}>
@@ -65,19 +66,18 @@ export default function Dashboard() {
       </div>
 
       <div className="grid two" style={{ marginTop: 14 }}>
-        <a className="node card gap" href={`#/b/${b.id}/gaps`} style={{ textDecoration: "none", color: "inherit", background: "var(--amber-soft)", borderColor: "var(--amber-line)" }}>
+        <a className="node card gap" href={`#/b/${b.id}/brand`} style={{ textDecoration: "none", color: "inherit", background: "var(--amber-soft)", borderColor: "var(--amber-line)" }}>
           <div className="k" style={{ color: "var(--amber)", fontSize: 11.5, letterSpacing: "0.09em", textTransform: "uppercase", fontWeight: 600 }}>
             Profile gap
           </div>
           <div className="t" style={{ fontFamily: "var(--display)", fontSize: 17, fontWeight: 600, margin: "3px 0 5px" }}>
-            {profileGaps.length} things the record is missing
+            {profileGaps.length} required fields still empty
           </div>
           <div className="d small">
-            Each one is a required field with nothing confirmed behind it. Filling them is what makes
-            the next batch of content better.
+            They live on My Brand under Needs attention, where you see them and fill them in the same place.
           </div>
         </a>
-        <a className="node card gap" href={`#/b/${b.id}/gaps`} style={{ textDecoration: "none", color: "inherit", background: "var(--amber-soft)", borderColor: "var(--amber-line)" }}>
+        <a className="node card gap" href={`#/b/${b.id}/brand`} style={{ textDecoration: "none", color: "inherit", background: "var(--amber-soft)", borderColor: "var(--amber-line)" }}>
           <div className="k" style={{ color: "var(--amber)", fontSize: 11.5, letterSpacing: "0.09em", textTransform: "uppercase", fontWeight: 600 }}>
             Market gap
           </div>
@@ -85,8 +85,7 @@ export default function Dashboard() {
             {marketGaps.length} things customers keep asking for
           </div>
           <div className="d small">
-            Read out of {messages.length} messages. Approve one and it becomes an offer, then an
-            announcement.
+            Read out of {messages.length} messages. They sit on My Brand, above the fields they would change.
           </div>
         </a>
       </div>
