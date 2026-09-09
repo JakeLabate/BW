@@ -16,12 +16,13 @@ export interface Brand {
   logo_url: string | null;
   primary_color: string | null;
   locations: string | null;
+  industry_key: string | null;
   created_at: string;
 }
 
 export interface FieldDef {
   key: string;
-  category: string;
+  group_key: string;
   label: string;
   help: string | null;
   required: boolean;
@@ -132,4 +133,57 @@ export const SOURCE_LABEL: Record<SourceKind, string> = {
   web_scrape: "Web",
   ai_inference: "AI inference",
   customer_inbox: "Customer inbox",
+};
+
+export type FactAction = "proposed" | "added" | "edited" | "confirmed" | "rejected" | "removed";
+
+export interface FieldGroup {
+  key: string;
+  label: string;
+  blurb: string | null;
+  sort: number;
+}
+
+export interface Industry {
+  key: string;
+  label: string;
+  blurb: string | null;
+  sort: number;
+}
+
+export interface ModuleStatus {
+  group_key: string;
+  label: string;
+  blurb: string | null;
+  tier: number;
+  sort: number;
+  enabled: boolean;
+  fields_total: number;
+  fields_filled: number;
+  required_total: number;
+  required_filled: number;
+  proposed_facts: number;
+  ready: boolean;
+}
+
+export interface FactHistory {
+  id: string;
+  brand_id: string;
+  field_key: string;
+  fact_id: string | null;
+  action: FactAction;
+  from_value: string | null;
+  to_value: string | null;
+  source_kind: SourceKind | null;
+  source_id: string | null;
+  at: string;
+}
+
+export const ACTION_LABEL: Record<FactAction, string> = {
+  proposed: "proposed",
+  added: "added",
+  edited: "edited",
+  confirmed: "confirmed",
+  rejected: "rejected",
+  removed: "removed",
 };

@@ -12,12 +12,17 @@ import type {
   Brand,
   ContentItem,
   Fact,
+  FactHistory,
   FieldDef,
+  FieldGroup,
   Gap,
+  Industry,
   Message,
+  ModuleStatus,
   Offer,
   Run,
   Schedule,
+  Source,
 } from "./types";
 
 // ---------------------------------------------------------------- routing
@@ -41,7 +46,12 @@ export function go(path: string) {
 interface BrandData {
   brand: Brand | null;
   defs: FieldDef[];
+  groups: FieldGroup[];
+  industries: Industry[];
+  modules: ModuleStatus[];
   facts: Fact[];
+  history: FactHistory[];
+  sources: Source[];
   gaps: Gap[];
   offers: Offer[];
   content: ContentItem[];
@@ -61,27 +71,42 @@ export function useBrand() {
   return v;
 }
 
+const EMPTY: Omit<BrandData, "reload"> = {
+  brand: null,
+  defs: [],
+  groups: [],
+  industries: [],
+  modules: [],
+  facts: [],
+  history: [],
+  sources: [],
+  gaps: [],
+  offers: [],
+  content: [],
+  messages: [],
+  schedules: [],
+  runs: [],
+  loading: true,
+  error: null,
+};
+
 export function BrandProvider({ brandId, children }: { brandId: string; children: ReactNode }) {
-  const [state, setState] = useState<Omit<BrandData, "reload">>({
-    brand: null,
-    defs: [],
-    facts: [],
-    gaps: [],
-    offers: [],
-    content: [],
-    messages: [],
-    schedules: [],
-    runs: [],
-    loading: true,
-    error: null,
-  });
+  const [state, setState] = useState(EMPTY);
 
   const reload = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
-    const [brand, defs, facts, gaps, offers, content, messages, schedules, runs] = await Promise.all([
+
+    const [
+      brand, defs, groups, industries, facts, history, sources,
+      gaps, offers, content, messages, schedules, runs,
+    ] = await Promise.all([
       supabase.from("brands").select("*").eq("id", brandId).maybeSingle(),
       supabase.from("field_defs").select("*").order("sort"),
+      supabase.from("field_groups").select("*").order("sort"),
+      supabase.from("industries").select("*").order("sort"),
       supabase.from("brand_facts").select("*").eq("brand_id", brandId).order("created_at"),
+      supabase.from("fact_history").select("*").eq("brand_id", brandId).order("at", { ascending: false }).limit(600),
+      supabase.from("sources").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
       supabase.from("gaps").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
       supabase.from("offers").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
       supabase.from("content_items").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
@@ -90,14 +115,26 @@ export function BrandProvider({ brandId, children }: { brandId: string; children
       supabase.from("runs").select("*").eq("brand_id", brandId).order("started_at", { ascending: false }).limit(25),
     ]);
 
-    const err = [brand, defs, facts, gaps, offers, content, messages, schedules, runs]
+    // module status is a function call, and only works once an industry is set
+    let modules: ModuleStatus[] = [];
+    if ((brand.data as Brand | null)?.industry_key) {
+      const { data } = await supabase.rpc("brand_module_status", { p_brand: brandId });
+      modules = (data as ModuleStatus[]) ?? [];
+    }
+
+    const err = [brand, defs, groups, industries, facts, history, sources, gaps, offers, content, messages, schedules, runs]
       .map((r) => r.error?.message)
       .find(Boolean);
 
     setState({
       brand: (brand.data as Brand) ?? null,
       defs: (defs.data as FieldDef[]) ?? [],
+      groups: (groups.data as FieldGroup[]) ?? [],
+      industries: (industries.data as Industry[]) ?? [],
+      modules,
       facts: (facts.data as Fact[]) ?? [],
+      history: (history.data as FactHistory[]) ?? [],
+      sources: (sources.data as Source[]) ?? [],
       gaps: (gaps.data as Gap[]) ?? [],
       offers: (offers.data as Offer[]) ?? [],
       content: (content.data as ContentItem[]) ?? [],
@@ -128,14 +165,24 @@ export function proposedFacts(facts: Fact[]) {
 export function openGaps(gaps: Gap[], kind?: "profile" | "market") {
   return gaps.filter((g) => g.status === "open" && (!kind || g.kind === kind));
 }
-export function completeness(defs: FieldDef[], facts: Fact[]) {
-  const confirmed = new Set(confirmedFacts(facts).map((f) => f.field_key));
-  const required = defs.filter((d) => d.required);
+
+/** Completeness across the modules this brand actually has switched on. */
+export function completeness(modules: ModuleStatus[]) {
+  const on = modules.filter((m) => m.enabled);
+  const requiredTotal = on.reduce((n, m) => n + m.required_total, 0);
+  const requiredFilled = on.reduce((n, m) => n + m.required_filled, 0);
+  const fieldsTotal = on.reduce((n, m) => n + m.fields_total, 0);
+  const fieldsFilled = on.reduce((n, m) => n + m.fields_filled, 0);
   return {
-    requiredTotal: required.length,
-    requiredFilled: required.filter((d) => confirmed.has(d.key)).length,
-    fieldsTotal: defs.length,
-    fieldsFilled: defs.filter((d) => confirmed.has(d.key)).length,
-    pct: required.length ? Math.round((required.filter((d) => confirmed.has(d.key)).length / required.length) * 100) : 0,
+    requiredTotal,
+    requiredFilled,
+    fieldsTotal,
+    fieldsFilled,
+    pct: requiredTotal ? Math.round((requiredFilled / requiredTotal) * 100) : 0,
   };
+}
+
+/** History for one field, newest first. */
+export function historyFor(history: FactHistory[], fieldKey: string) {
+  return history.filter((h) => h.field_key === fieldKey);
 }

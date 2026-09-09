@@ -78,8 +78,8 @@ Deno.serve(handle(async (req) => {
       .select("id")
       .single();
 
-    const { data: defs } = await supa.from("field_defs").select("key");
-    const valid = new Set((defs ?? []).map((d) => d.key));
+    const { data: defs } = await supa.rpc("industry_fields", { p_brand: brand_id });
+    const valid = new Set((defs ?? []).map((d: { key: string }) => d.key));
 
     const rows = (out.facts ?? [])
       .filter((f) => valid.has(String(f.field_key)) && f.value)

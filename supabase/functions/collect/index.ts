@@ -46,10 +46,15 @@ Deno.serve(handle(async (req) => {
     .single();
   if (brandErr || !brand) throw new HttpError("brand not found", 404);
 
-  const { data: defs } = await supa
-    .from("field_defs")
-    .select("key, label, help, category, multi")
-    .order("sort");
+  // fields this brand's industry can hold, enabled modules or not
+  const { data: defs, error: defsErr } = await supa.rpc("industry_fields", { p_brand: brand_id });
+  if (defsErr) throw new HttpError(defsErr.message, 500);
+  if (!defs?.length) {
+    throw new HttpError(
+      "This brand has no industry preset yet, so there are no fields to collect into.",
+      422,
+    );
+  }
 
   const apiKey = await anthropicKeyFor(user.id);
 
@@ -103,7 +108,8 @@ Deno.serve(handle(async (req) => {
       .slice(0, 90_000);
 
     const fieldList = (defs ?? [])
-      .map((d) => `- ${d.key} (${d.category}) — ${d.label}${d.multi ? " [multiple allowed]" : ""}${d.help ? `: ${d.help}` : ""}`)
+      .map((d: { key: string; group_label: string; label: string; multi: boolean; help: string | null }) =>
+        `- ${d.key} (${d.group_label}) — ${d.label}${d.multi ? " [multiple allowed]" : ""}${d.help ? `: ${d.help}` : ""}`)
       .join("\n");
 
     const reply = await claude({
@@ -115,8 +121,9 @@ Deno.serve(handle(async (req) => {
         `MATERIAL:\n${corpus}`,
     });
 
+    const valid = new Set((defs ?? []).map((d: { key: string }) => d.key));
     const extracted = parseJson<Extracted[]>(reply).filter(
-      (f) => f && f.field_key && f.value && (defs ?? []).some((d) => d.key === f.field_key),
+      (f) => f && f.field_key && f.value && valid.has(f.field_key),
     );
 
     // ---- store as proposed facts, skipping duplicates --------------------
@@ -146,7 +153,18 @@ Deno.serve(handle(async (req) => {
 
     await supa.rpc("refresh_profile_gaps", { p_brand: brand_id });
 
+    const moduleOf = new Map(
+      (defs ?? []).map((d: { key: string; group_key: string; group_label: string; enabled: boolean }) =>
+        [d.key, { key: d.group_key, label: d.group_label, enabled: d.enabled }]),
+    );
+    const newModules: Record<string, number> = {};
+    for (const r of rows) {
+      const m = moduleOf.get(r.field_key);
+      if (m && !m.enabled) newModules[m.label] = (newModules[m.label] ?? 0) + 1;
+    }
+
     return {
+      modules_suggested: newModules,
       pages_read: pages.length,
       pages_failed: failed,
       proposed: rows.length,

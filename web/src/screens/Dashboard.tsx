@@ -2,9 +2,9 @@ import { completeness, openGaps, proposedFacts, useBrand } from "../lib/store";
 import { timeAgo } from "../lib/ui";
 
 export default function Dashboard() {
-  const { brand, defs, facts, gaps, content, messages, runs } = useBrand();
+  const { brand, modules, facts, gaps, content, messages, runs } = useBrand();
   const b = brand!;
-  const c = completeness(defs, facts);
+  const c = completeness(modules);
   const proposed = proposedFacts(facts);
   const profileGaps = openGaps(gaps, "profile");
   const marketGaps = openGaps(gaps, "market");
@@ -38,16 +38,16 @@ export default function Dashboard() {
 
       <div className="section-title">The loop</div>
       <div className="loop">
-        <a className="node" href={`#/b/${b.id}/collect`}>
+        <a className="node" href={`#/b/${b.id}/sources`}>
           <div className="k">1. Collect</div>
           <div className="t">Sources</div>
           <div className="d">
             Owner input, the website, AI reading the logo and past posts, and the customer inbox.
           </div>
         </a>
-        <a className="node" href={`#/b/${b.id}/profile`}>
+        <a className="node" href={`#/b/${b.id}/brand`}>
           <div className="k">2. Store</div>
-          <div className="t">Brand profile</div>
+          <div className="t">My Brand</div>
           <div className="d">
             {c.fieldsFilled} of {c.fieldsTotal} fields have a confirmed value. Nothing is used until you confirm it.
           </div>

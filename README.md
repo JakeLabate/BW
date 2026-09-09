@@ -22,6 +22,28 @@ confirmed value behind it, so the app nudges the owner to fill it and the next b
 better. A **market gap** is repeated demand in the customer inbox for something the business does not
 sell; approving one creates an offer, and an offer becomes an announcement.
 
+## The profile is modular, and shaped by the industry
+
+A brand profile is not one flat list of fields. It is assembled from **modules**, and which modules
+a business starts with depends on what kind of business it is. A real estate agent gets Listings and
+Neighborhoods on day one; an auto dealership gets Inventory instead. Eleven industry presets, 27
+modules, 96 fields.
+
+Modules arrive in three tiers: on from day one, the natural next step, and for later. A later module
+becomes available once the day one modules are about 70% filled, **or** the moment a collection run
+finds something that belongs in it. So the profile grows because the business has outgrown it, not
+because a form demanded forty answers up front.
+
+Gaps only ever come from modules that are switched on, which is what keeps a new brand from opening
+with an impossible checklist.
+
+## Every field remembers
+
+`fact_history` records each change to every field: added, edited, confirmed, rejected or removed,
+with the old value, the new value, the source responsible and the timestamp. It is written by a
+database trigger rather than by the app, so nothing can slip past it, and it is read only to
+clients. Each field on My Brand expands to show its own trail.
+
 ## Ground rules baked into the code
 
 - Nothing collected is treated as true. Every extracted fact lands as `proposed` with its source and
@@ -43,8 +65,8 @@ sell; approving one creates an offer, and an offer becomes an announcement.
 ```
 web/                     the app
   src/lib/               supabase client, store, shared UI
-  src/screens/           one file per tab
-supabase/migrations/     schema, RLS, the field checklist, the gap engine
+  src/screens/           one file per left-nav section
+supabase/migrations/     schema, RLS, modules and presets, field history, the engines
 supabase/functions/      keys, collect, infer, mine, generate
 ```
 

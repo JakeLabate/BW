@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { BrandProvider, go, openGaps, useBrand, useHashRoute } from "./lib/store";
@@ -8,8 +8,8 @@ import { Notice, useAction, Busy } from "./lib/ui";
 import SignIn from "./screens/SignIn";
 import Brands from "./screens/Brands";
 import Dashboard from "./screens/Dashboard";
-import Collect from "./screens/Collect";
-import Profile from "./screens/Profile";
+import MyBrand from "./screens/MyBrand";
+import Sources from "./screens/Sources";
 import Gaps from "./screens/Gaps";
 import Inbox from "./screens/Inbox";
 import Generate from "./screens/Generate";
@@ -41,7 +41,7 @@ export default function App() {
 
   if (!session) return <SignIn />;
 
-  const brandMatch = path.match(/^\/b\/([0-9a-f-]{36})(\/[a-z]*)?(\?.*)?$/i);
+  const brandMatch = path.match(/^\/b\/([0-9a-f-]{36})(\/[a-z-]*)?(\?.*)?$/i);
 
   return (
     <div className="shell">
@@ -50,14 +50,8 @@ export default function App() {
         <BrandProvider brandId={brandMatch[1]}>
           <BrandShell tab={(brandMatch[2] ?? "/").replace("/", "") || "home"} />
         </BrandProvider>
-      ) : path.startsWith("/account") ? (
-        <main>
-          <Account />
-        </main>
       ) : (
-        <main>
-          <Brands />
-        </main>
+        <main className="plain">{path.startsWith("/account") ? <Account /> : <Brands />}</main>
       )}
     </div>
   );
@@ -109,23 +103,34 @@ function TopBar({ email, brandId }: { email: string; brandId?: string }) {
   );
 }
 
-const TABS = [
-  ["home", "Overview"],
-  ["collect", "Collect"],
-  ["profile", "Profile"],
-  ["gaps", "Gaps"],
-  ["inbox", "Inbox"],
-  ["generate", "Generate"],
-  ["queue", "Queue"],
-  ["settings", "Settings"],
-] as const;
+const NAV: Array<{ key: string; label: string; group: string }> = [
+  { key: "home", label: "Overview", group: "" },
+  { key: "brand", label: "My Brand", group: "Knowledge" },
+  { key: "sources", label: "Sources", group: "Knowledge" },
+  { key: "gaps", label: "Gaps", group: "Knowledge" },
+  { key: "inbox", label: "Customer Inbox", group: "Knowledge" },
+  { key: "generate", label: "Generate", group: "Content" },
+  { key: "queue", label: "Queue", group: "Content" },
+  { key: "settings", label: "Settings", group: "Brand" },
+];
+
+const SCREENS: Record<string, ComponentType> = {
+  home: Dashboard,
+  brand: MyBrand,
+  sources: Sources,
+  gaps: Gaps,
+  inbox: Inbox,
+  generate: Generate,
+  queue: Queue,
+  settings: Settings,
+};
 
 function BrandShell({ tab }: { tab: string }) {
-  const { brand, loading, error, facts, gaps, content, messages } = useBrand();
+  const { brand, loading, error, facts, gaps, content, messages, sources } = useBrand();
 
   if (loading && !brand) {
     return (
-      <main>
+      <main className="plain">
         <div className="wrap">
           <span className="spin" />
         </div>
@@ -134,7 +139,7 @@ function BrandShell({ tab }: { tab: string }) {
   }
   if (!brand) {
     return (
-      <main>
+      <main className="plain">
         <div className="wrap">
           <Notice kind="err">{error ?? "That brand does not exist, or is not yours."}</Notice>
           <a href="#/">Back to brands</a>
@@ -144,33 +149,38 @@ function BrandShell({ tab }: { tab: string }) {
   }
 
   const counts: Record<string, { n: number; hot?: boolean }> = {
-    profile: { n: facts.filter((f) => f.status === "proposed").length, hot: true },
+    brand: { n: facts.filter((f) => f.status === "proposed").length, hot: true },
     gaps: { n: openGaps(gaps).length, hot: true },
+    sources: { n: sources.length },
     inbox: { n: messages.length },
-    queue: { n: content.filter((c) => c.status !== "published" && c.status !== "archived").length },
+    queue: { n: content.filter((c) => c.status === "draft").length, hot: true },
   };
 
-  const Screen = {
-    home: Dashboard,
-    collect: Collect,
-    profile: Profile,
-    gaps: Gaps,
-    inbox: Inbox,
-    generate: Generate,
-    queue: Queue,
-    settings: Settings,
-  }[tab] ?? Dashboard;
+  const Screen = SCREENS[tab] ?? Dashboard;
+  let lastGroup = "";
 
   return (
-    <>
-      <nav className="nav">
-        {TABS.map(([k, label]) => {
-          const c = counts[k];
+    <div className="layout">
+      <nav className="side">
+        <div className="side-brand">
+          <span className="swatch" style={{ background: brand.primary_color ?? "var(--violet)" }} />
+          <span className="name">{brand.name}</span>
+        </div>
+        {NAV.map((item) => {
+          const showGroup = item.group && item.group !== lastGroup;
+          lastGroup = item.group;
+          const c = counts[item.key];
           return (
-            <a key={k} className={tab === k ? "on" : ""} href={`#/b/${brand.id}${k === "home" ? "" : `/${k}`}`}>
-              {label}
-              {c && c.n > 0 && <span className={`count${c.hot ? " hot" : ""}`}>{c.n}</span>}
-            </a>
+            <div key={item.key}>
+              {showGroup && <div className="side-group">{item.group}</div>}
+              <a
+                className={tab === item.key ? "side-link on" : "side-link"}
+                href={`#/b/${brand.id}${item.key === "home" ? "" : `/${item.key}`}`}
+              >
+                <span>{item.label}</span>
+                {c && c.n > 0 && <span className={`count${c.hot ? " hot" : ""}`}>{c.n}</span>}
+              </a>
+            </div>
           );
         })}
       </nav>
@@ -180,6 +190,6 @@ function BrandShell({ tab }: { tab: string }) {
           <Screen />
         </div>
       </main>
-    </>
+    </div>
   );
 }

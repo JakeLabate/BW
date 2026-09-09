@@ -5,9 +5,9 @@ import { PLATFORMS, type Platform } from "../lib/types";
 import { Busy, Notice, useAction } from "../lib/ui";
 
 export default function Generate() {
-  const { brand, defs, facts, offers, content, reload } = useBrand();
+  const { brand, modules, facts, offers, content, reload } = useBrand();
   const b = brand!;
-  const c = completeness(defs, facts);
+  const c = completeness(modules);
   const confirmed = confirmedFacts(facts);
 
   const preselected = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("offer");
@@ -46,7 +46,7 @@ export default function Generate() {
       {confirmed.length === 0 && (
         <Notice kind="warn">
           Nothing is confirmed yet, so generation would be inventing.{" "}
-          <a href={`#/b/${b.id}/profile`}>Confirm some facts first</a>.
+          <a href={`#/b/${b.id}/brand`}>Confirm some facts first</a>.
         </Notice>
       )}
 
