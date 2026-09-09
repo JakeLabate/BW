@@ -25,26 +25,26 @@ begin
   if tg_op = 'INSERT' then
     insert into fact_history (brand_id, field_key, fact_id, action, from_value, to_value, source_kind, source_id, actor)
     values (new.brand_id, new.field_key, new.id,
-            case when new.status = 'confirmed' then 'added' else 'proposed' end,
+            (case when new.status = 'confirmed' then 'added' else 'proposed' end)::fact_action,
             null, new.value, new.source_kind, new.source_id, auth.uid());
     return new;
 
   elsif tg_op = 'UPDATE' then
     if new.value is distinct from old.value then
       insert into fact_history (brand_id, field_key, fact_id, action, from_value, to_value, source_kind, source_id, actor)
-      values (new.brand_id, new.field_key, new.id, 'edited', old.value, new.value, new.source_kind, new.source_id, auth.uid());
+      values (new.brand_id, new.field_key, new.id, 'edited'::fact_action, old.value, new.value, new.source_kind, new.source_id, auth.uid());
     end if;
     if new.status is distinct from old.status then
       insert into fact_history (brand_id, field_key, fact_id, action, from_value, to_value, source_kind, source_id, actor)
       values (new.brand_id, new.field_key, new.id,
-              case new.status when 'confirmed' then 'confirmed' when 'rejected' then 'rejected' else 'proposed' end,
+              (case new.status when 'confirmed' then 'confirmed' when 'rejected' then 'rejected' else 'proposed' end)::fact_action,
               old.status::text, new.status::text, new.source_kind, new.source_id, auth.uid());
     end if;
     return new;
 
   else
     insert into fact_history (brand_id, field_key, fact_id, action, from_value, to_value, source_kind, source_id, actor)
-    values (old.brand_id, old.field_key, old.id, 'removed', old.value, null, old.source_kind, old.source_id, auth.uid());
+    values (old.brand_id, old.field_key, old.id, 'removed'::fact_action, old.value, null, old.source_kind, old.source_id, auth.uid());
     return old;
   end if;
 end $$;
