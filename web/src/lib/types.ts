@@ -1,0 +1,135 @@
+export type SourceKind = "owner_input" | "web_scrape" | "ai_inference" | "customer_inbox";
+export type FactStatus = "proposed" | "confirmed" | "rejected";
+export type GapKind = "profile" | "market";
+export type GapStatus = "open" | "snoozed" | "dismissed" | "resolved";
+export type OfferStatus = "proposed" | "approved" | "rejected" | "live";
+export type ContentStatus = "draft" | "approved" | "queued" | "published" | "archived";
+export type Platform = "facebook" | "linkedin" | "instagram" | "x" | "email" | "blog";
+
+export interface Brand {
+  id: string;
+  owner_id: string;
+  name: string;
+  website_url: string | null;
+  industry: string | null;
+  one_liner: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  locations: string | null;
+  created_at: string;
+}
+
+export interface FieldDef {
+  key: string;
+  category: string;
+  label: string;
+  help: string | null;
+  required: boolean;
+  multi: boolean;
+  sort: number;
+}
+
+export interface Fact {
+  id: string;
+  brand_id: string;
+  field_key: string;
+  value: string;
+  status: FactStatus;
+  confidence: number | null;
+  source_id: string | null;
+  source_kind: SourceKind;
+  evidence: { quote?: string | null; page?: string | null };
+  created_at: string;
+}
+
+export interface Source {
+  id: string;
+  brand_id: string;
+  kind: SourceKind;
+  label: string;
+  url: string | null;
+  config: Record<string, unknown>;
+  last_run_at: string | null;
+  created_at: string;
+}
+
+export interface Message {
+  id: string;
+  brand_id: string;
+  channel: string;
+  sender: string | null;
+  subject: string | null;
+  body: string;
+  received_at: string;
+}
+
+export interface Gap {
+  id: string;
+  brand_id: string;
+  kind: GapKind;
+  field_key: string | null;
+  title: string;
+  detail: string | null;
+  suggestion: string | null;
+  demand_count: number;
+  evidence: Array<{ message_id?: string; quote?: string }>;
+  status: GapStatus;
+  created_at: string;
+}
+
+export interface Offer {
+  id: string;
+  brand_id: string;
+  gap_id: string | null;
+  name: string;
+  description: string | null;
+  price: string | null;
+  status: OfferStatus;
+  announced: boolean;
+  created_at: string;
+}
+
+export interface ContentItem {
+  id: string;
+  brand_id: string;
+  campaign_id: string | null;
+  platform: Platform;
+  title: string | null;
+  body: string;
+  hashtags: string | null;
+  status: ContentStatus;
+  scheduled_for: string | null;
+  published_at: string | null;
+  grounded_in: string[];
+  created_at: string;
+}
+
+export interface Schedule {
+  id: string;
+  brand_id: string;
+  platform: Platform;
+  days_of_week: number[];
+  time_of_day: string;
+  timezone: string;
+  active: boolean;
+}
+
+export interface Run {
+  id: string;
+  brand_id: string;
+  kind: string;
+  status: "queued" | "running" | "done" | "failed";
+  detail: Record<string, unknown>;
+  error: string | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export const PLATFORMS: Platform[] = ["linkedin", "facebook", "instagram", "x", "email", "blog"];
+
+export const SOURCE_LABEL: Record<SourceKind, string> = {
+  owner_input: "Owner input",
+  web_scrape: "Web",
+  ai_inference: "AI inference",
+  customer_inbox: "Customer inbox",
+};
