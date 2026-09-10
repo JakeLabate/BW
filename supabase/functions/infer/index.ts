@@ -25,9 +25,8 @@ Return ONLY JSON: {"palette": ["#hex", ...], "facts": [{field_key, value, confid
 
 Deno.serve(handle(async (req) => {
   const { user, supa } = await requireUser(req);
-  const { brand_id, source_id, logo_data_url, posts_text } = await req.json();
+  const { brand_id, source_id, logo_data_url, posts_text, use_collected_posts } = await req.json();
   if (!brand_id) throw new HttpError("brand_id required");
-  if (!logo_data_url && !posts_text) throw new HttpError("give me a logo, a post history, or both");
 
   const { data: brand } = await supa.from("brands").select("id, name").eq("id", brand_id).single();
   if (!brand) throw new HttpError("brand not found", 404);
@@ -49,6 +48,40 @@ Deno.serve(handle(async (req) => {
 
   const apiKey = await anthropicKeyFor(user.id);
 
+  // Integration settings govern this run the same way they govern every other.
+  const scope: string[] = integration?.scope ?? [];
+  const floor = Number(integration?.min_confidence ?? 0);
+  const autoConfirm = !!integration?.auto_confirm;
+
+  // Anything a feed integration already collected is post history we do not
+  // need to ask for again. Outbound only: the brand talking, not customers.
+  let posts = posts_text ? String(posts_text) : "";
+  let collected = 0;
+  if (use_collected_posts !== false) {
+    const { data: own } = await supa
+      .from("messages")
+      .select("provider, subject, body, received_at")
+      .eq("brand_id", brand_id)
+      .eq("direction", "outbound")
+      .order("received_at", { ascending: false })
+      .limit(40);
+    if (own?.length) {
+      collected = own.length;
+      const block = own
+        .map((m) => [m.subject, m.body].filter(Boolean).join("\n").trim())
+        .filter((t) => t.length > 20)
+        .join("\n\n");
+      posts = posts ? `${posts}\n\n${block}` : block;
+    }
+  }
+
+  if (!logo_data_url && !posts) {
+    throw new HttpError(
+      "Nothing to read. Upload a logo, paste some posts, or connect a feed integration first.",
+      422,
+    );
+  }
+
   return json(await withRun(supa, brand_id, "infer", async (log) => {
     const content: Array<Record<string, unknown>> = [];
 
@@ -62,15 +95,15 @@ Deno.serve(handle(async (req) => {
       content.push({ type: "text", text: "That image is the business logo." });
     }
 
-    if (posts_text) {
+    if (posts) {
       content.push({
         type: "text",
-        text: `PAST POSTS (most recent first, separated by blank lines):\n\n${String(posts_text).slice(0, 60_000)}`,
+        text: `PAST POSTS (most recent first, separated by blank lines):\n\n${posts.slice(0, 60_000)}`,
       });
     }
 
     content.push({ type: "text", text: `Business: ${brand.name}. Infer identity and voice now.` });
-    log({ has_logo: !!logo_data_url, posts_chars: posts_text ? String(posts_text).length : 0 });
+    log({ has_logo: !!logo_data_url, posts_chars: posts.length, collected_posts: collected });
 
     const reply = await claude({
       apiKey,
@@ -81,20 +114,37 @@ Deno.serve(handle(async (req) => {
     });
     const out = parseJson<{ palette?: string[]; facts?: Array<Record<string, unknown>> }>(reply);
 
-    const { data: source } = await supa
-      .from("sources")
-      .insert({
-        brand_id,
-        kind: "ai_inference",
-        label: logo_data_url && posts_text ? "Logo and post history" : logo_data_url ? "Logo" : "Post history",
-        config: { palette: out.palette ?? [] },
-        last_run_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+    // Reuse the integration that asked for this run. Only mint a source row when
+    // the call came from somewhere else.
+    let sourceId = integration?.id ?? null;
+    if (sourceId) {
+      await supa
+        .from("sources")
+        .update({ config: { ...(integration!.config ?? {}), palette: out.palette ?? [] } })
+        .eq("id", sourceId);
+      await supa.rpc("bump_integration", { p_source: sourceId });
+    } else {
+      const { data: source } = await supa
+        .from("sources")
+        .insert({
+          brand_id,
+          kind: "ai_inference",
+          provider: "ai_inference",
+          name: logo_data_url && posts ? "Logo and post history" : logo_data_url ? "Logo" : "Post history",
+          label: logo_data_url && posts ? "Logo and post history" : logo_data_url ? "Logo" : "Post history",
+          config: { palette: out.palette ?? [] },
+          last_run_at: new Date().toISOString(),
+          run_count: 1,
+        })
+        .select("id")
+        .single();
+      sourceId = source?.id ?? null;
+    }
 
     const { data: defs } = await supa.rpc("industry_fields", { p_brand: brand_id });
-    const valid = new Set((defs ?? []).map((d: { key: string }) => d.key));
+    const allowed = ((defs ?? []) as Array<{ key: string; group_key: string }>)
+      .filter((d) => !scope.length || scope.includes(d.group_key));
+    const valid = new Set(allowed.map((d) => d.key));
 
     const rows = (out.facts ?? [])
       .filter((f) => valid.has(String(f.field_key)) && f.value)
@@ -106,7 +156,7 @@ Deno.serve(handle(async (req) => {
         value: String(f.value).slice(0, 2000),
         status: (autoConfirm ? "confirmed" : "proposed") as "confirmed" | "proposed",
         confidence: f.conf,
-        source_id: source?.id ?? null,
+        source_id: sourceId,
         source_kind: "ai_inference" as const,
         evidence: { quote: f.quote ?? null },
       }));
@@ -119,6 +169,13 @@ Deno.serve(handle(async (req) => {
     }
 
     await supa.rpc("refresh_profile_gaps", { p_brand: brand_id });
-    return { proposed: rows.length, auto_confirmed: autoConfirm ? rows.length : 0, palette: out.palette ?? [] };
+    return {
+      proposed: rows.length,
+      auto_confirmed: autoConfirm ? rows.length : 0,
+      below_confidence_floor: (out.facts ?? []).length - rows.length,
+      collected_posts: collected,
+      palette: out.palette ?? [],
+      source_id: sourceId,
+    };
   }));
 }));

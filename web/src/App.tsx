@@ -101,13 +101,13 @@ function TopBar({ email, brandId }: { email: string; brandId?: string }) {
   );
 }
 
-const NAV: Array<{ key: string; label: string; group: string }> = [
-  { key: "home", label: "Overview", group: "" },
-  { key: "brand", label: "My Brand", group: "Knowledge" },
-  { key: "integrations", label: "Integrations", group: "Knowledge" },
-  { key: "generate", label: "Generate", group: "Content" },
-  { key: "queue", label: "Queue", group: "Content" },
-  { key: "settings", label: "Settings", group: "Brand" },
+const NAV: Array<{ key: string; label: string }> = [
+  { key: "home", label: "Overview" },
+  { key: "brand", label: "My Brand" },
+  { key: "integrations", label: "Integrations" },
+  { key: "generate", label: "Generate" },
+  { key: "queue", label: "Queue" },
+  { key: "settings", label: "Settings" },
 ];
 
 const SCREENS: Record<string, ComponentType> = {
@@ -152,7 +152,6 @@ function BrandShell({ tab }: { tab: string }) {
   };
 
   const Screen = SCREENS[tab] ?? Dashboard;
-  let lastGroup = "";
 
   return (
     <div className="layout">
@@ -162,20 +161,16 @@ function BrandShell({ tab }: { tab: string }) {
           <span className="name">{brand.name}</span>
         </div>
         {NAV.map((item) => {
-          const showGroup = item.group && item.group !== lastGroup;
-          lastGroup = item.group;
           const c = counts[item.key];
           return (
-            <div key={item.key}>
-              {showGroup && <div className="side-group">{item.group}</div>}
-              <a
-                className={tab === item.key ? "side-link on" : "side-link"}
-                href={`#/b/${brand.id}${item.key === "home" ? "" : `/${item.key}`}`}
-              >
-                <span>{item.label}</span>
-                {c && c.n > 0 && <span className={`count${c.hot ? " hot" : ""}`}>{c.n}</span>}
-              </a>
-            </div>
+            <a
+              key={item.key}
+              className={tab === item.key ? "side-link on" : "side-link"}
+              href={`#/b/${brand.id}${item.key === "home" ? "" : `/${item.key}`}`}
+            >
+              <span>{item.label}</span>
+              {c && c.n > 0 && <span className={`count${c.hot ? " hot" : ""}`}>{c.n}</span>}
+            </a>
           );
         })}
       </nav>

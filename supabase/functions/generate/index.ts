@@ -88,7 +88,7 @@ Deno.serve(handle(async (req) => {
       system: SYSTEM,
       maxTokens: 8000,
       content:
-        `Business: ${brand.name}${brand.one_liner ? ` — ${brand.one_liner}` : ""}\n` +
+        `Business: ${brand.name}${brand.one_liner ? ` - ${brand.one_liner}` : ""}\n` +
         `Platform: ${platform}\nHow many posts: ${count}\n\n` +
         `CONFIRMED BRAND PROFILE:\n${profile}\n\n` +
         (offer

@@ -162,7 +162,7 @@ Deno.serve(handle(async (req) => {
 
     const fieldList = offered
       .map((d) =>
-        `- ${d.key} (${d.group_label}) — ${d.label}${d.multi ? " [multiple allowed]" : ""}${d.help ? `: ${d.help}` : ""}`)
+        `- ${d.key} (${d.group_label}) - ${d.label}${d.multi ? " [multiple allowed]" : ""}${d.help ? `: ${d.help}` : ""}`)
       .join("\n");
 
     const reply = await claude({

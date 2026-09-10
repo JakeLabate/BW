@@ -43,10 +43,30 @@ export interface Fact {
   created_at: string;
 }
 
+export type ProviderCategory = "web" | "inbox" | "social" | "reviews" | "owner" | "ai";
+export type IngestMethod = "webhook" | "feed" | "scrape" | "paste" | "upload";
+
+/** A platform an integration can be created from, and how it actually connects. */
+export interface SourceProvider {
+  key: string;
+  label: string;
+  kind: SourceKind;
+  category: ProviderCategory;
+  blurb: string;
+  ingest: IngestMethod;
+  live: boolean;
+  setup: string | null;
+  url_hint: string | null;
+  doc_url: string | null;
+  sort: number;
+}
+
 export interface Source {
   id: string;
   brand_id: string;
   kind: SourceKind;
+  provider: string | null;
+  ingest_token: string | null;
   name: string;
   label: string;
   url: string | null;
@@ -67,10 +87,17 @@ export interface Message {
   id: string;
   brand_id: string;
   source_id: string | null;
+  provider: string | null;
+  /** inbound = a customer said it. outbound = the business published it. */
+  direction: "inbound" | "outbound";
   channel: string;
   sender: string | null;
   subject: string | null;
   body: string;
+  external_id: string | null;
+  permalink: string | null;
+  author_handle: string | null;
+  meta: Record<string, unknown>;
   received_at: string;
 }
 
@@ -143,6 +170,32 @@ export const SOURCE_LABEL: Record<SourceKind, string> = {
   web_scrape: "Web",
   ai_inference: "AI inference",
   customer_inbox: "Customer inbox",
+};
+
+export const CATEGORY_LABEL: Record<ProviderCategory, string> = {
+  web: "Your website",
+  inbox: "Client communication",
+  social: "Social and publishing",
+  reviews: "Reviews and listings",
+  owner: "What only you know",
+  ai: "Inference",
+};
+
+export const CATEGORY_BLURB: Record<ProviderCategory, string> = {
+  web: "Rules read the site and the pages most likely to hold facts. No key, no model.",
+  inbox: "Where customers actually talk to you. This is the only place market gaps can come from.",
+  social: "What you have already published. Feeds arrive whole; the rest is a paste until the platform opens up.",
+  reviews: "What other people say about you, and the listing details you forgot you set.",
+  owner: "The things written down nowhere but in your head.",
+  ai: "Claude reads a logo and a body of past posts and infers palette and voice.",
+};
+
+export const INGEST_LABEL: Record<IngestMethod, string> = {
+  webhook: "Receives a webhook",
+  feed: "Reads the published feed",
+  scrape: "Reads the public page",
+  paste: "You paste it",
+  upload: "You upload it",
 };
 
 export type FactAction = "proposed" | "added" | "edited" | "confirmed" | "rejected" | "removed";

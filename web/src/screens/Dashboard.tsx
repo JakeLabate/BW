@@ -85,7 +85,7 @@ export default function Dashboard() {
             {marketGaps.length} things customers keep asking for
           </div>
           <div className="d small">
-            Read out of {messages.length} messages. They sit on My Brand, above the fields they would change.
+            Read out of {messages.filter((m) => m.direction === "inbound").length} customer messages. They sit on My Brand, above the fields they would change.
           </div>
         </a>
       </div>

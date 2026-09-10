@@ -106,7 +106,11 @@ export default function Settings() {
             </tr>
             <tr>
               <td>Customer messages</td>
-              <td className="right">{messages.length}</td>
+              <td className="right">{messages.filter((m) => m.direction === "inbound").length}</td>
+            </tr>
+            <tr>
+              <td>Your own posts collected</td>
+              <td className="right">{messages.filter((m) => m.direction === "outbound").length}</td>
             </tr>
             <tr>
               <td>Content pieces</td>

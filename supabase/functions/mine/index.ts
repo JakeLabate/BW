@@ -42,10 +42,16 @@ Deno.serve(handle(async (req) => {
       .from("messages")
       .select("id, channel, sender, subject, body, received_at")
       .eq("brand_id", brand_id)
+      .eq("direction", "inbound")
       .order("received_at", { ascending: false })
       .limit(400);
 
-    if (!messages?.length) throw new HttpError("no messages to read yet", 422);
+    if (!messages?.length) {
+      throw new HttpError(
+        "No inbound messages yet. Market gaps come from what customers say, not from what the business publishes.",
+        422,
+      );
+    }
 
     const { data: facts } = await supa
       .from("brand_facts")
@@ -69,7 +75,7 @@ Deno.serve(handle(async (req) => {
     log({ messages: messages.length, existing_gaps: openGaps?.length ?? 0 });
 
     const inbox = messages
-      .map((m) => `[${m.id}] ${m.received_at.slice(0, 10)} ${m.channel} from ${m.sender ?? "unknown"}${m.subject ? ` — ${m.subject}` : ""}\n${m.body.slice(0, 1200)}`)
+      .map((m) => `[${m.id}] ${m.received_at.slice(0, 10)} ${m.channel} from ${m.sender ?? "unknown"}${m.subject ? ` - ${m.subject}` : ""}\n${m.body.slice(0, 1200)}`)
       .join("\n\n")
       .slice(0, 120_000);
 

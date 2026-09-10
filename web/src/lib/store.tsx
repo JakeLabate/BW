@@ -23,6 +23,7 @@ import type {
   Run,
   Schedule,
   Source,
+  SourceProvider,
 } from "./types";
 
 // ---------------------------------------------------------------- routing
@@ -52,6 +53,7 @@ interface BrandData {
   facts: Fact[];
   history: FactHistory[];
   sources: Source[];
+  providers: SourceProvider[];
   gaps: Gap[];
   offers: Offer[];
   content: ContentItem[];
@@ -80,6 +82,7 @@ const EMPTY: Omit<BrandData, "reload"> = {
   facts: [],
   history: [],
   sources: [],
+  providers: [],
   gaps: [],
   offers: [],
   content: [],
@@ -97,7 +100,7 @@ export function BrandProvider({ brandId, children }: { brandId: string; children
     setState((s) => ({ ...s, loading: true, error: null }));
 
     const [
-      brand, defs, groups, industries, facts, history, sources,
+      brand, defs, groups, industries, facts, history, sources, providers,
       gaps, offers, content, messages, schedules, runs,
     ] = await Promise.all([
       supabase.from("brands").select("*").eq("id", brandId).maybeSingle(),
@@ -107,6 +110,7 @@ export function BrandProvider({ brandId, children }: { brandId: string; children
       supabase.from("brand_facts").select("*").eq("brand_id", brandId).order("created_at"),
       supabase.from("fact_history").select("*").eq("brand_id", brandId).order("at", { ascending: false }).limit(600),
       supabase.from("sources").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
+      supabase.from("source_providers").select("*").order("sort"),
       supabase.from("gaps").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
       supabase.from("offers").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
       supabase.from("content_items").select("*").eq("brand_id", brandId).order("created_at", { ascending: false }),
@@ -122,7 +126,7 @@ export function BrandProvider({ brandId, children }: { brandId: string; children
       modules = (data as ModuleStatus[]) ?? [];
     }
 
-    const err = [brand, defs, groups, industries, facts, history, sources, gaps, offers, content, messages, schedules, runs]
+    const err = [brand, defs, groups, industries, facts, history, sources, providers, gaps, offers, content, messages, schedules, runs]
       .map((r) => r.error?.message)
       .find(Boolean);
 
@@ -135,6 +139,7 @@ export function BrandProvider({ brandId, children }: { brandId: string; children
       facts: (facts.data as Fact[]) ?? [],
       history: (history.data as FactHistory[]) ?? [],
       sources: (sources.data as Source[]) ?? [],
+      providers: (providers.data as SourceProvider[]) ?? [],
       gaps: (gaps.data as Gap[]) ?? [],
       offers: (offers.data as Offer[]) ?? [],
       content: (content.data as ContentItem[]) ?? [],

@@ -321,7 +321,7 @@ function FieldCard({
                   <div className="q">
                     {SOURCE_LABEL[f.source_kind]}
                     {f.evidence?.rule ? <> · <code>{f.evidence.rule}</code></> : null}
-                    {f.evidence?.quote ? ` — "${f.evidence.quote}"` : ""}
+                    {f.evidence?.quote ? ` - "${f.evidence.quote}"` : ""}
                   </div>
                 </div>
                 <div className="acts">
@@ -344,7 +344,7 @@ function FieldCard({
                   {SOURCE_LABEL[f.source_kind]}
                   {f.evidence?.rule ? <> · <code>{f.evidence.rule}</code></> : null}
                   {f.confidence != null ? ` · confidence ${f.confidence}` : ""}
-                  {f.evidence?.quote ? ` — "${f.evidence.quote}"` : ""}
+                  {f.evidence?.quote ? ` - "${f.evidence.quote}"` : ""}
                 </div>
               </div>
               <div className="acts">

@@ -50,6 +50,42 @@ there, so a scraper that keeps guessing at your voice can be told to stick to co
 Schedules are stored intent. Automatic runs are not wired up yet, so anything other than manual
 shows as due rather than firing on its own.
 
+## One door per platform, and no OAuth app
+
+`source_providers` is a catalogue of 42 named platforms across six categories: your website, client
+communication, social and publishing, reviews and listings, what only you know, and inference. Each
+entry states how information actually gets out of that platform, and whether that path is built or
+still a paste. Nothing here asks you for a password or an OAuth grant.
+
+There are four working paths.
+
+**Webhook.** Every inbox integration mints a private ingest URL. Anything that can send an HTTP POST
+can feed it: a Gmail filter through Zapier, a Slack workflow step, a Power Automate flow, a Twilio
+number, an Intercom or Zendesk or Front webhook, or the form on your own site posting straight to
+it. `supabase/functions/ingest` reads field names loosely, so `body`, `text`, `message` and
+`content` all mean the message and `from`, `sender`, `email` and `name` all mean who sent it. It
+unwraps a Slack event envelope, answers Slack's verification handshake, understands form encoded
+posts, strips the quoted reply chain off an email, uses any id in the payload to ignore a repeat
+delivery, and refuses to store anything whose key looks like a token or a password. The URL is the
+only credential, so it is masked in the interface and can be rotated in one click.
+
+**Feed.** A surprising number of platforms still hand you everything for free. `supabase/functions/feed`
+reads RSS, Atom and JSON Feed, and knows how to turn a profile URL into the address the platform
+actually serves: a YouTube handle becomes the channel's Atom feed, a subreddit gets `.rss`, a
+Substack gets `/feed`, a Medium profile becomes `medium.com/feed/@you`. For anything else it reads
+the page and follows whatever feed it declares. No key, no model, nothing invented.
+
+**Scrape.** The deterministic harvester below, pointed at your site, a Google Business profile, a
+Yelp page or a Trustpilot listing.
+
+**Paste.** The honest fallback. Instagram, LinkedIn, X, TikTok, Threads, G2 and Tripadvisor either
+gate their APIs behind app review or block readers outright, so those providers say `paste for now`
+on their own card rather than pretending otherwise.
+
+Messages carry a direction. `inbound` is a customer talking, and only inbound messages feed the
+market gap loop. `outbound` is the business talking, and those feed voice inference, so connecting a
+feed means you never have to paste ten posts into the inference panel again.
+
 ## Rules before the model
 
 `supabase/functions/_shared/harvest.ts` fills the profile from a website without calling a model at

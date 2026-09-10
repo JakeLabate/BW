@@ -67,13 +67,9 @@ main.plain { padding: 28px 20px 80px; }
   position: sticky; top: 56px; align-self: flex-start;
   max-height: calc(100vh - 56px); overflow-y: auto;
 }
-.side-brand { display: flex; align-items: center; gap: 8px; padding: 4px 10px 14px; }
+.side-brand { display: flex; align-items: center; gap: 8px; padding: 4px 10px 12px; }
 .side-brand .swatch { width: 14px; height: 14px; border-radius: 4px; flex: 0 0 14px; }
 .side-brand .name { font-family: var(--display); font-weight: 600; font-size: 15px; line-height: 1.25; }
-.side-group {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
-  color: var(--ink-3); padding: 16px 10px 5px;
-}
 .side-link {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 8px 10px; margin-bottom: 1px; border-radius: 7px;
@@ -91,7 +87,7 @@ main.plain { padding: 28px 20px 80px; }
     border-right: 0; border-bottom: 1px solid var(--line);
     display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 12px;
   }
-  .side-brand, .side-group { display: none; }
+  .side-brand { display: none; }
   .side-link { margin: 0; }
 }
 .wrap { max-width: 1080px; margin: 0 auto; }
@@ -119,7 +115,7 @@ main.plain { padding: 28px 20px 80px; }
 /* ---------------------------------------------------------------- inputs */
 label { display: block; font-size: 13px; font-weight: 500; color: var(--ink-2); margin-bottom: 5px; }
 label .hint { display: block; font-weight: 400; color: var(--ink-3); font-size: 12.5px; margin-top: 2px; }
-input[type="text"], input[type="url"], input[type="email"], input[type="password"], input[type="time"], textarea, select {
+input[type="text"], input[type="url"], input[type="email"], input[type="password"], input[type="time"], input[type="search"], textarea, select {
   width: 100%; padding: 9px 11px; font: inherit; font-size: 14px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink);
 }
@@ -265,3 +261,24 @@ button.ok { color: var(--green); border-color: var(--green-line); background: va
 .pick .sub { display: block; font-size: 13px; color: var(--ink-3); margin-top: 2px; font-weight: 400; }
 .pick.on { border-color: var(--violet); background: var(--violet-soft); }
 .pick.on strong { color: var(--violet); }
+
+/* ------------------------------------------------------ provider catalogue */
+.provider-grid {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+}
+.provider {
+  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+  text-align: left; white-space: normal; line-height: 1.4;
+  padding: 11px 13px; height: 100%;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+}
+.provider:hover { border-color: var(--violet); background: var(--violet-soft); }
+.provider strong { font-family: var(--display); font-size: 14px; font-weight: 600; }
+.provider .small { font-size: 12px; }
+.provider .pill { align-self: flex-start; margin-top: 2px; }
+.code {
+  font-family: var(--mono); font-size: 12px; line-height: 1.55;
+  background: var(--line-2); border-radius: 8px; padding: 10px 12px;
+  margin: 10px 0 6px; overflow-x: auto; white-space: pre;
+}
