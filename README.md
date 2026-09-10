@@ -50,6 +50,36 @@ there, so a scraper that keeps guessing at your voice can be told to stick to co
 Schedules are stored intent. Automatic runs are not wired up yet, so anything other than manual
 shows as due rather than firing on its own.
 
+## Rules before the model
+
+`supabase/functions/_shared/harvest.ts` fills the profile from a website without calling a model at
+all. It reads, in descending order of trust:
+
+1. **JSON-LD**: Organization and LocalBusiness subtypes, plus FAQPage. A business that publishes
+   schema.org has already answered the question, so name, legal name, phone, email, address, opening
+   hours, price range, area served, founding date, sameAs profiles, offer catalogue, aggregate
+   rating, awards and named people all come straight out at 0.85 to 0.95 confidence.
+2. **Microdata**: the same vocabulary in attribute form, including void elements where the value
+   sits in `content` rather than between tags.
+3. **Meta tags**: og:site_name, descriptions, theme-color, og:image.
+4. **Link protocols**: `tel:` and `mailto:` are unambiguous by construction, so they score 0.95.
+   Social profiles are matched by host, with share and intent URLs excluded.
+5. **Text patterns**: a deliberately small set: established year, family or veteran owned, licensed
+   and insured, opening hours lines, "serving X, Y and Z", licence numbers. These sit at 0.6 to 0.8
+   because they are heuristics, and they are the first thing to distrust.
+
+Every value carries the rule that produced it, so a wrong value is traceable to a rule and the rule
+is fixable. Values are ranked by rule trust rather than by which page they came from, single-value
+fields keep only the best-sourced answer, and the same profile found in both `sameAs` and a footer
+link is deduplicated to one.
+
+The harvester reports what it could not answer, which is the point: a website integration set to
+`assisted` runs rules first and then spends model tokens only on the remainder. Set to `rules` it
+never calls a model at all and needs no API key.
+
+`tools/harvest.test.mjs` covers the rules against fixtures, including a hostile one that checks the
+extractor refuses to invent a business name, a phone number, or an email out of `logo@2x.png`.
+
 ## Every field remembers
 
 `fact_history` records each change to every field: added, edited, confirmed, rejected or removed,

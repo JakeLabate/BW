@@ -39,7 +39,7 @@ export interface Fact {
   confidence: number | null;
   source_id: string | null;
   source_kind: SourceKind;
-  evidence: { quote?: string | null; page?: string | null };
+  evidence: { quote?: string | null; page?: string | null; rule?: string | null };
   created_at: string;
 }
 
@@ -53,6 +53,7 @@ export interface Source {
   config: Record<string, unknown>;
   status: "active" | "paused";
   schedule: "manual" | "daily" | "weekly" | "monthly";
+  extract_mode: "rules" | "assisted" | "ai";
   scope: string[];
   min_confidence: number;
   auto_confirm: boolean;

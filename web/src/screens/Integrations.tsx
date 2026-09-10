@@ -18,6 +18,12 @@ const KIND_BLURB: Record<SourceKind, string> = {
   customer_inbox: "Gmail, Instagram DM, Messenger and contact form messages. Feeds the market gap loop.",
 };
 
+const MODES = [
+  ["rules", "Rules only, no AI"],
+  ["assisted", "Rules first, AI for the rest"],
+  ["ai", "AI only"],
+] as const;
+
 const SCHEDULES = [
   ["manual", "Only when I run it"],
   ["daily", "Daily"],
@@ -165,6 +171,10 @@ export default function Integrations() {
                     typeof d.below_confidence_floor === "number" && d.below_confidence_floor
                       ? `${d.below_confidence_floor} below floor`
                       : null,
+                    typeof d.fields_covered === "number" ? `${d.fields_covered} fields` : null,
+                    d.rules_fired && typeof d.rules_fired === "object"
+                      ? `${Object.keys(d.rules_fired as object).length} rules fired`
+                      : null,
                     typeof d.gaps_found === "number" ? `${d.gaps_found} market gaps` : null,
                     typeof d.drafted === "number" ? `${d.drafted} drafts` : null,
                   ].filter(Boolean);
@@ -269,21 +279,56 @@ function IntegrationCard({
   const scope = (source.scope ?? []) as string[];
 
   const run = useAction(async (payload: Record<string, unknown>) => {
-    const endpoint = source.kind === "ai_inference" ? "infer" : "collect";
-    const r = await fn<Record<string, unknown>>(endpoint, {
-      brand_id: brandId,
-      source_id: source.id,
-      ...payload,
-    });
+    const mode = source.extract_mode ?? "assisted";
+    const said: string[] = [];
+
+    // Rules first. Free, fast, and it never invents anything.
+    if (source.kind === "web_scrape" && mode !== "ai") {
+      const h = await fn<{
+        pages_read: number;
+        proposed: number;
+        fields_covered: number;
+        still_empty_required?: string[];
+        rules_fired?: Record<string, number>;
+      }>("harvest", { brand_id: brandId, source_id: source.id, ...payload });
+      const rules = Object.keys(h.rules_fired ?? {}).length;
+      said.push(
+        `Rules read ${h.pages_read} pages and captured ${h.proposed} values across ${h.fields_covered} fields from ${rules} matching rules, with no model involved.`,
+      );
+      if (mode === "rules" && h.still_empty_required?.length) {
+        said.push(`Rules could not answer: ${h.still_empty_required.slice(0, 6).join(", ")}.`);
+      }
+    }
+
+    // Then the model, for whatever is left.
+    if (mode !== "rules") {
+      const endpoint = source.kind === "ai_inference" ? "infer" : "collect";
+      try {
+        const r = await fn<Record<string, unknown>>(endpoint, {
+          brand_id: brandId,
+          source_id: source.id,
+          ...payload,
+        });
+        const bits = [
+          typeof r.pages_read === "number" && !said.length ? `${r.pages_read} pages read` : null,
+          typeof r.proposed === "number" ? `${r.proposed} values` : null,
+          typeof r.below_confidence_floor === "number" && r.below_confidence_floor
+            ? `${r.below_confidence_floor} below the confidence floor`
+            : null,
+        ].filter(Boolean);
+        said.push(said.length ? `Model pass added ${bits.join(", ")}.` : `${bits.join(", ")}.`);
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (said.length && /no_api_key/.test(msg)) {
+          said.push("The model pass was skipped because there is no Anthropic key on your account.");
+        } else {
+          throw e;
+        }
+      }
+    }
+
     await onDone();
-    const parts = [
-      typeof r.pages_read === "number" ? `${r.pages_read} pages read` : null,
-      typeof r.proposed === "number" ? `${r.proposed} values captured` : null,
-      typeof r.below_confidence_floor === "number" && r.below_confidence_floor
-        ? `${r.below_confidence_floor} dropped below the confidence floor`
-        : null,
-    ].filter(Boolean);
-    return parts.join(", ") || "Done.";
+    return said.join(" ") || "Done.";
   });
 
   const mine = useAction(async () => {
@@ -316,6 +361,8 @@ function IntegrationCard({
             {source.run_count ?? 0} {(source.run_count ?? 0) === 1 ? "run" : "runs"}
             {" · last "}
             {timeAgo(source.last_run_at)}
+            {source.kind === "web_scrape" &&
+              ` · ${source.extract_mode === "rules" ? "rules only" : source.extract_mode === "ai" ? "AI only" : "rules then AI"}`}
             {scope.length > 0 && ` · writes to ${scope.length} modules only`}
             {source.auto_confirm && " · auto confirms"}
           </div>
@@ -394,6 +441,7 @@ function IntegrationSettings({
   const [name, setName] = useState(source.name ?? source.label);
   const [url, setUrl] = useState(source.url ?? "");
   const [schedule, setSchedule] = useState<Source["schedule"]>(source.schedule ?? "manual");
+  const [mode, setMode] = useState<Source["extract_mode"]>(source.extract_mode ?? "assisted");
   const [status, setStatus] = useState<Source["status"]>(source.status ?? "active");
   const [scope, setScope] = useState<string[]>((source.scope ?? []) as string[]);
   const [floor, setFloor] = useState(String(source.min_confidence ?? 0));
@@ -410,6 +458,7 @@ function IntegrationSettings({
         url: u || null,
         schedule,
         status,
+        extract_mode: mode,
         scope,
         min_confidence: Number(floor) || 0,
         auto_confirm: autoConfirm,
@@ -458,6 +507,25 @@ function IntegrationSettings({
             ))}
           </select>
         </div>
+        {source.kind === "web_scrape" && (
+          <div className="field">
+            <label>
+              How it extracts
+              <span className="hint">
+                Rules read schema.org, meta tags and link protocols. They cost nothing, need no API
+                key, and cannot invent a value. The model is only worth paying for on what rules
+                cannot answer.
+              </span>
+            </label>
+            <select value={mode} onChange={(e) => setMode(e.target.value as Source["extract_mode"])}>
+              {MODES.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label>Status</label>
           <select value={status} onChange={(e) => setStatus(e.target.value as Source["status"])}>
