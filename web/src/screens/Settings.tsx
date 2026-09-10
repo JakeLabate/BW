@@ -4,7 +4,7 @@ import { go, useBrand } from "../lib/store";
 import { Busy, Notice, useAction } from "../lib/ui";
 
 export default function Settings() {
-  const { brand, facts, content, messages, industries, reload } = useBrand();
+  const { brand, industries, reload } = useBrand();
   const b = brand!;
   const [name, setName] = useState(b.name);
   const [site, setSite] = useState(b.website_url ?? "");
@@ -94,30 +94,6 @@ export default function Settings() {
           Switch a module off and its fields stop being asked for. Values already recorded stay put.
         </p>
         <ModuleToggles brandId={b.id} />
-      </div>
-
-      <div className="section-title">What is stored</div>
-      <div className="card">
-        <table className="table">
-          <tbody>
-            <tr>
-              <td>Facts</td>
-              <td className="right">{facts.length}</td>
-            </tr>
-            <tr>
-              <td>Customer messages</td>
-              <td className="right">{messages.filter((m) => m.direction === "inbound").length}</td>
-            </tr>
-            <tr>
-              <td>Your own posts collected</td>
-              <td className="right">{messages.filter((m) => m.direction === "outbound").length}</td>
-            </tr>
-            <tr>
-              <td>Content pieces</td>
-              <td className="right">{content.length}</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
 
       <div className="section-title">Danger</div>
